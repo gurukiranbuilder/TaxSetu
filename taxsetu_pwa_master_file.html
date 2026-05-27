@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>TaxSetu - Investment Capital Gains Audit & Tax Planner PWA</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts for modern crisp typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- PWA & Apple Specific Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="TaxSetu">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- Inject Web App Manifest dynamically for standalone PWA capability -->
+  <script>
+    const manifestData = {
+      "short_name": "TaxSetu",
+      "name": "TaxSetu Capital Gains Auditor",
+      "icons": [
+        {
+          "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='%2310b981'><circle cx='50' cy='50' r='50'/><path d='M30 40 L45 55 L70 30' stroke='white' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>",
+          "sizes": "192x192",
+          "type": "image/svg+xml",
+          "purpose": "any maskable"
+        },
+        {
+          "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='%2310b981'><circle cx='50' cy='50' r='50'/><path d='M30 40 L45 55 L70 30' stroke='white' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>",
+          "sizes": "512x512",
+          "type": "image/svg+xml",
+          "purpose": "any maskable"
+        }
+      ],
+      "start_url": ".",
+      "background_color": "#ffffff",
+      "theme_color": "#ffffff",
+      "display": "standalone",
+      "orientation": "portrait"
+    };
+    
+    const stringManifest = JSON.stringify(manifestData);
+    const blob = new Blob([stringManifest], {type: 'application/json'});
+    const manifestURL = URL.createObjectURL(blob);
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = manifestURL;
+    document.head.appendChild(link);
+  </script>
+
+  <!-- Register Embedded Service Worker safely -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        // Sandboxed environments (like iframes and preview environments) block registering service workers from blob URLs.
+        // We bypass registration in sandboxes to prevent console errors, while keeping the configuration active for production deployments.
+        const isSandbox = window.location.hostname.includes('usercontent.goog') || 
+                          window.location.hostname.includes('webcontainer.io') || 
+                          window.location.protocol === 'blob:';
+        
+        if (!isSandbox) {
+          const swCode = `
+            const CACHE_NAME = 'taxsetu-v1';
+            const ASSETS = [
+              '/',
+              '/index.html'
+            ];
+
+            self.addEventListener('install', (e) => {
+              e.waitUntil(
+                caches.open(CACHE_NAME).then((cache) => {
+                  return cache.addAll(ASSETS);
+                })
+              );
+            });
+
+            self.addEventListener('fetch', (e) => {
+              e.respondWith(
+                caches.match(e.request).then((cachedResponse) => {
+                  return cachedResponse || fetch(e.request);
+                })
+              );
+            });
+          `;
+          try {
+            const swBlob = new Blob([swCode], { type: 'application/javascript' });
+            const swURL = URL.createObjectURL(swBlob);
+            navigator.serviceWorker.register(swURL)
+              .then(reg => console.log('TaxSetu Service Worker Registered!'))
+              .catch(err => console.warn('Service Worker Registration skipped on local preview:', err));
+          } catch (e) {
+            console.warn('Service Worker setup bypassed:', e);
+          }
+        } else {
+          console.log('Running in Sandbox Mode: Service Worker registration bypassed to prevent browser security blocks. It will run normally when hosted on standard domains (e.g., GitHub Pages).');
+        }
+      });
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* Smooth transition overrides for mobile devices */
+    .slide-up-modal {
+      animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 selection:bg-teal-100 selection:text-teal-900 overflow-x-hidden pb-safe">
+
+  <!-- Main Root Wrapper -->
+  <div id="root" class="min-h-screen flex flex-col"></div>
+
+  <!-- React & React DOM from CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Application Source Logic -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // Cost Inflation Index Table for India
+    const CII_TABLE = {
+      "2001-02": 100, "2002-03": 105, "2003-04": 109, "2004-05": 113, "2005-06": 117,
+      "2006-07": 122, "2007-08": 129, "2008-09": 137, "2009-10": 148, "2010-11": 167,
+      "2011-12": 184, "2012-13": 200, "2013-14": 220, "2014-15": 240, "2015-16": 254,
+      "2016-17": 264, "2017-18": 272, "2018-19": 280, "2019-20": 289, "2020-21": 301,
+      "2021-22": 317, "2022-23": 331, "2023-24": 348, "2024-25": 363, "2025-26": 376,
+      "2026-27": 390
+    };
+
+    const getFinancialYear = (dateStr) => {
+      if (!dateStr) return "2025-26";
+      const date = new Date(dateStr);
+      const year = date.getFullYear();
+      const month = date.getMonth(); 
+      if (month >= 3) {
+        return `${year}-${String(year + 1).slice(-2)}`;
+      } else {
+        return `${year - 1}-${String(year).slice(-2)}`;
+      }
+    };
+
+    const INITIAL_TRANSACTIONS = [
+      {
+        id: "tx-1",
+        assetName: "HDFC Bank Ltd",
+        assetType: "equity",
+        buyDate: "2022-05-15",
+        buyPrice: 1350,
+        qty: 100,
+        sellDate: "2025-10-20",
+        sellPrice: 1720,
+      },
+      {
+        id: "tx-2",
+        assetName: "Paras Defence Unlisted",
+        assetType: "gold_unlisted",
+        buyDate: "2023-01-10",
+        buyPrice: 320,
+        qty: 150,
+        sellDate: "2025-11-05",
+        sellPrice: 590,
+      },
+      {
+        id: "tx-3",
+        assetName: "Sector 56 Gurgaon Plot",
+        assetType: "real_estate",
+        buyDate: "2018-07-20",
+        buyPrice: 4500000,
+        qty: 1,
+        sellDate: "2025-08-12",
+        sellPrice: 8500000,
+      }
+    ];
+
+    function App() {
+      const [transactions, setTransactions] = useState(() => {
+        const saved = localStorage.getItem('taxsetu_transactions');
+        return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+      });
+
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [selectedFY, setSelectedFY] = useState('2025-26');
+      const [taxSlab, setTaxSlab] = useState(30); 
+      const [showAddModal, setShowAddModal] = useState(false);
+      const [showInstallGuide, setShowInstallGuide] = useState(false);
+      const [isInstalledStandalone, setIsInstalledStandalone] = useState(false);
+
+      const [formData, setFormData] = useState({
+        assetName: '',
+        assetType: 'equity',
+        buyDate: '',
+        buyPrice: '',
+        qty: '',
+        sellDate: '',
+        sellPrice: '',
+      });
+
+      // Detect Standalone execution (installed as PWA)
+      useEffect(() => {
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+          setIsInstalledStandalone(true);
+        }
+      }, []);
+
+      useEffect(() => {
+        localStorage.setItem('taxsetu_transactions', JSON.stringify(transactions));
+      }, [transactions]);
+
+      const handleAddTransaction = (e) => {
+        e.preventDefault();
+        if (!formData.assetName || !formData.buyDate || !formData.buyPrice || !formData.qty || !formData.sellDate || !formData.sellPrice) {
+          alert("Please enter all details correctly.");
+          return;
+        }
+        const newTx = {
+          id: 'tx-' + Date.now(),
+          assetName: formData.assetName,
+          assetType: formData.assetType,
+          buyDate: formData.buyDate,
+          buyPrice: parseFloat(formData.buyPrice),
+          qty: parseFloat(formData.qty),
+          sellDate: formData.sellDate,
+          sellPrice: parseFloat(formData.sellPrice),
+        };
+        setTransactions([newTx, ...transactions]);
+        setShowAddModal(false);
+        setFormData({
+          assetName: '',
+          assetType: 'equity',
+          buyDate: '',
+          buyPrice: '',
+          qty: '',
+          sellDate: '',
+          sellPrice: '',
+        });
+      };
+
+      const deleteTransaction = (id) => {
+        setTransactions(transactions.filter(t => t.id !== id));
+      };
+
+      const fyList = useMemo(() => {
+        const years = new Set(["2025-26", "2024-25"]);
+        transactions.forEach(t => {
+          years.add(getFinancialYear(t.sellDate));
+        });
+        return Array.from(years).sort().reverse();
+      }, [transactions]);
+
+      const processedTransactions = useMemo(() => {
+        return transactions.map(t => {
+          const buyD = new Date(t.buyDate);
+          const sellD = new Date(t.sellDate);
+          const holdingDays = Math.ceil((sellD - buyD) / (1000 * 60 * 60 * 24));
+          
+          const buyFY = getFinancialYear(t.buyDate);
+          const sellFY = getFinancialYear(t.sellDate);
+
+          const buyCost = t.buyPrice * t.qty;
+          const saleValue = t.sellPrice * t.qty;
+          const absoluteGain = saleValue - buyCost;
+
+          let classification = 'STCG';
+          let taxRate = 0;
+          let holdsIndexedOption = false;
+          let indexedCost = buyCost;
+          let indexedGain = absoluteGain;
+
+          if (t.assetType === 'equity') {
+            classification = holdingDays >= 365 ? 'LTCG' : 'STCG';
+            taxRate = classification === 'LTCG' ? 12.5 : 20.0;
+          } else if (t.assetType === 'debt_mf') {
+            classification = 'STCG (Slab)';
+            taxRate = taxSlab;
+          } else if (t.assetType === 'gold_unlisted') {
+            classification = holdingDays >= 730 ? 'LTCG' : 'STCG';
+            taxRate = classification === 'LTCG' ? 12.5 : taxSlab;
+          } else if (t.assetType === 'real_estate') {
+            classification = holdingDays >= 730 ? 'LTCG' : 'STCG';
+            taxRate = classification === 'LTCG' ? 12.5 : taxSlab;
+
+            const cutOffDate = new Date('2024-07-23');
+            if (classification === 'LTCG' && buyD < cutOffDate) {
+              holdsIndexedOption = true;
+              const buyCII = CII_TABLE[buyFY] || 100;
+              const sellCII = CII_TABLE[sellFY] || 376;
+              indexedCost = buyCost * (sellCII / buyCII);
+              indexedGain = saleValue - indexedCost;
+            }
+          }
+
+          let calculatedTax = 0;
+          let taxOptimizationNote = "";
+          let indexationAdvantage = false;
+
+          if (holdsIndexedOption) {
+            const taxFlat_12_5 = Math.max(0, absoluteGain * 0.125);
+            const taxIndexed_20 = Math.max(0, indexedGain * 0.20);
+            
+            if (taxIndexed_20 < taxFlat_12_5) {
+              calculatedTax = taxIndexed_20;
+              indexationAdvantage = true;
+              taxOptimizationNote = `Optimal choice: 20% with Indexation (Saved ₹${Math.round(taxFlat_12_5 - taxIndexed_20).toLocaleString('en-IN')})`;
+            } else {
+              calculatedTax = taxFlat_12_5;
+              taxOptimizationNote = `Optimal choice: 12.5% Flat without Indexation (Saved ₹${Math.round(taxIndexed_20 - taxFlat_12_5).toLocaleString('en-IN')})`;
+            }
+          } else {
+            calculatedTax = Math.max(0, absoluteGain * (taxRate / 100));
+          }
+
+          return {
+            ...t,
+            holdingDays, buyFY, sellFY, buyCost, saleValue, absoluteGain,
+            classification, taxRate, holdsIndexedOption, indexedCost,
+            indexedGain, calculatedTax, indexationAdvantage, taxOptimizationNote
+          };
+        });
+      }, [transactions, taxSlab]);
+
+      const stats = useMemo(() => {
+        const currentFYTxs = processedTransactions.filter(t => t.sellFY === selectedFY);
+
+        let totalEquityLTCG = 0;
+        let totalOtherLTCG = 0;
+        let totalSTCG = 0;
+        let totalTax = 0;
+        let netGain = 0;
+
+        currentFYTxs.forEach(t => {
+          netGain += t.absoluteGain;
+          if (t.classification === 'LTCG') {
+            if (t.assetType === 'equity') {
+              totalEquityLTCG += t.absoluteGain;
+            } else {
+              totalOtherLTCG += t.absoluteGain;
+            }
+          } else {
+            totalSTCG += t.absoluteGain;
+          }
+          totalTax += t.calculatedTax;
+        });
+
+        let equityTaxExemptGains = Math.min(totalEquityLTCG, 125000);
+        let taxableEquityLTCG = Math.max(0, totalEquityLTCG - 125000);
+        
+        let adjustedTax = totalTax;
+        if (totalEquityLTCG > 0) {
+          const basicEquityTaxWithoutExemption = totalEquityLTCG * 0.125;
+          const actualEquityTax = taxableEquityLTCG * 0.125;
+          adjustedTax = Math.max(0, totalTax - (basicEquityTaxWithoutExemption - actualEquityTax));
+        }
+
+        return {
+          netGain, totalEquityLTCG, totalOtherLTCG, totalSTCG,
+          adjustedTax, equityTaxExemptGains, taxableEquityLTCG
+        };
+      }, [processedTransactions, selectedFY]);
+
+      return (
+        <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col justify-between">
+          
+          {/* Header */}
+          <header className="sticky top-0 bg-white border-b border-slate-200 z-30 px-4 py-4 shadow-xs">
+            <div className="max-w-md mx-auto flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="bg-emerald-500 text-white p-2 rounded-xl shadow-xs">
+                  <i data-lucide="sparkles" className="w-5 h-5"></i>
+                </div>
+                <div>
+                  <h1 className="font-bold text-lg tracking-tight text-slate-900">TaxSetu</h1>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cap Gains Audit</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                {!isInstalledStandalone && (
+                  <button 
+                    onClick={() => setShowInstallGuide(true)}
+                    className="text-xs bg-emerald-50 hover:bg-emerald-100 transition text-emerald-700 py-1.5 px-3 rounded-full font-bold border border-emerald-100 flex items-center gap-1.5"
+                  >
+                    <i data-lucide="download" className="w-3.5 h-3.5"></i> Add App
+                  </button>
+                )}
+                <div className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1.5 rounded-full font-bold border border-slate-200/50">
+                  FY {selectedFY}
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Core Content View */}
+          <main className="flex-1 max-w-md w-full mx-auto p-4 space-y-5 pb-28">
+            
+            {/* AUDIT SUMMARY BOARD */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wide">Net Portfolio Realizations</span>
+                  <div className="flex items-center space-x-1.5 mt-1">
+                    <span className={`text-2xl font-black tabular-nums tracking-tight ${stats.netGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {stats.netGain >= 0 ? '+' : ''}₹{stats.netGain.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wide">Audit Tax Liability</span>
+                  <div className="text-xl font-extrabold text-slate-900 mt-1 tabular-nums">
+                    ₹{Math.round(stats.adjustedTax).toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Exemption Limits Tracking */}
+              <div className="grid grid-cols-3 gap-2.5 pt-4 border-t border-slate-100 text-xs">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                  <span className="text-[9px] text-slate-400 block uppercase font-bold">Equities LTCG</span>
+                  <span className="font-extrabold text-slate-800 mt-1 block">₹{stats.totalEquityLTCG.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                  <span className="text-[9px] text-slate-400 block uppercase font-bold">Exempt (Sec 112A)</span>
+                  <span className="font-extrabold text-teal-600 mt-1 block">₹{stats.equityTaxExemptGains.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                  <span className="text-[9px] text-slate-400 block uppercase font-bold">Unused Exemption</span>
+                  <span className="font-extrabold text-amber-600 mt-1 block">₹{Math.max(0, 125000 - stats.equityTaxExemptGains).toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              {/* Dynamic Year & Slab Toggles */}
+              <div className="flex gap-2 pt-2 text-xs">
+                <div className="flex-1 space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase">Assessment Year</label>
+                  <select 
+                    value={selectedFY} 
+                    onChange={(e) => setSelectedFY(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-2.5 font-bold text-slate-700 outline-none focus:border-emerald-500"
+                  >
+                    {fyList.map(fy => (
+                      <option key={fy} value={fy}>FY {fy}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase">Income Slab Bracket</label>
+                  <select 
+                    value={taxSlab} 
+                    onChange={(e) => setTaxSlab(parseInt(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-2.5 font-bold text-slate-700 outline-none focus:border-emerald-500"
+                  >
+                    <option value={10}>10% Slab</option>
+                    <option value={15}>15% Slab</option>
+                    <option value={20}>20% Slab</option>
+                    <option value={30}>30% Slab</option>
+                    <option value={39}>39% Surcharge</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* TAB CONTROLS */}
+            <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
+              <button 
+                onClick={() => setActiveTab('dashboard')}
+                className={`flex-1 text-center py-2.5 text-xs font-bold rounded-lg transition-all ${activeTab === 'dashboard' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Audit Ledger
+              </button>
+              <button 
+                onClick={() => setActiveTab('indexation')}
+                className={`flex-1 text-center py-2.5 text-xs font-bold rounded-lg transition-all ${activeTab === 'indexation' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Indexation
+              </button>
+              <button 
+                onClick={() => setActiveTab('harvesting')}
+                className={`flex-1 text-center py-2.5 text-xs font-bold rounded-lg transition-all ${activeTab === 'harvesting' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Tax Planner
+              </button>
+            </div>
+
+            {/* TAB VIEW: LEDGER */}
+            {activeTab === 'dashboard' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-slate-900 text-sm">Realized Sales & Assets ({selectedFY})</h3>
+                  <button 
+                    onClick={() => setShowAddModal(true)}
+                    className="bg-emerald-600 hover:bg-emerald-700 transition text-white text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 shadow-xs"
+                  >
+                    <i data-lucide="plus" className="w-4.5 h-4.5"></i> Add Record
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {processedTransactions.filter(t => t.sellFY === selectedFY).length === 0 ? (
+                    <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-3">
+                      <div className="bg-slate-100 p-3 rounded-full w-12 h-12 flex items-center justify-center mx-auto text-slate-400">
+                        <i data-lucide="file-spreadsheet" className="w-6 h-6"></i>
+                      </div>
+                      <p className="text-xs text-slate-500 font-semibold">No investment exits logged for {selectedFY}.</p>
+                    </div>
+                  ) : (
+                    processedTransactions.filter(t => t.sellFY === selectedFY).map(t => (
+                      <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3 relative">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <h4 className="font-extrabold text-sm text-slate-950">{t.assetName}</h4>
+                              <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 uppercase tracking-wider">
+                                {t.assetType.replace('_', ' ')}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-1 font-medium">
+                              Held for {t.holdingDays} days &middot; <span className="font-bold text-slate-600">{t.classification}</span>
+                            </p>
+                          </div>
+                          <button 
+                            onClick={() => deleteTransaction(t.id)}
+                            className="text-slate-300 hover:text-rose-500 transition p-1"
+                          >
+                            <i data-lucide="trash-2" className="w-4 h-4"></i>
+                          </button>
+                        </div>
+
+                        {/* Cost & Exit Numbers */}
+                        <div className="grid grid-cols-3 gap-2 py-2 border-t border-slate-100 text-xs">
+                          <div>
+                            <span className="text-[9px] text-slate-400 block uppercase font-bold">Invested Cost</span>
+                            <span className="font-bold text-slate-700">₹{t.buyCost.toLocaleString('en-IN')}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 block uppercase font-bold">Exit Value</span>
+                            <span className="font-bold text-slate-700">₹{t.saleValue.toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] text-slate-400 block uppercase font-bold">Net Profit</span>
+                            <span className={`font-black block ${t.absoluteGain >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {t.absoluteGain >= 0 ? '+' : ''}₹{t.absoluteGain.toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Dual Benefit Choice Note */}
+                        {t.holdsIndexedOption && (
+                          <div className="bg-emerald-50/60 border border-emerald-100/50 rounded-lg p-2.5 text-[10px] text-emerald-800">
+                            <span className="font-bold block uppercase tracking-wider text-[9px] text-emerald-700">CII Comparison Opted</span>
+                            <p className="text-slate-600 mt-0.5 font-medium">{t.taxOptimizationNote}</p>
+                          </div>
+                        )}
+
+                        {/* Estimated Assessment */}
+                        <div className="bg-slate-50 rounded-lg px-2.5 py-2 flex justify-between items-center text-xs text-slate-500 border border-slate-200/50 font-medium">
+                          <span>Calculated Assessment ({t.taxRate}% Rate)</span>
+                          <span className="font-extrabold text-slate-900">₹{Math.round(t.calculatedTax).toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB VIEW: INDEXATION COMPARER */}
+            {activeTab === 'indexation' && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3">
+                  <div className="flex items-center space-x-2 text-emerald-600">
+                    <i data-lucide="calculator" className="w-5 h-5"></i>
+                    <h3 className="font-bold text-slate-900 text-sm">Property Indexation Auditor</h3>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                    Following the latest Indian Budget tax provisions, property purchased before **July 23, 2024** and sold as a Long-Term Capital asset is eligible to compare **20% (with Indexation benefits)** against **12.5% (flat)**.
+                  </p>
+                </div>
+
+                {/* List Real Estate Only */}
+                <div className="space-y-3">
+                  {processedTransactions.filter(t => t.assetType === 'real_estate' && t.classification === 'LTCG' && t.holdsIndexedOption).length === 0 ? (
+                    <div className="bg-white border border-slate-200 rounded-xl p-8 text-center space-y-2">
+                      <p className="text-xs text-slate-500 font-semibold">No pre-July 2024 real estate items found.</p>
+                      <button 
+                        onClick={() => { setShowAddModal(true); setFormData({...formData, assetType: 'real_estate'}); }}
+                        className="text-xs text-emerald-600 font-bold underline"
+                      >
+                        Add long-term property
+                      </button>
+                    </div>
+                  ) : (
+                    processedTransactions.filter(t => t.assetType === 'real_estate' && t.classification === 'LTCG' && t.holdsIndexedOption).map(t => {
+                      const buyCII = CII_TABLE[t.buyFY] || 100;
+                      const sellCII = CII_TABLE[t.sellFY] || 376;
+                      const tax125 = t.absoluteGain * 0.125;
+                      const tax20 = t.indexedGain * 0.20;
+                      const optimal = tax20 < tax125;
+
+                      return (
+                        <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+                          <div className="border-b border-slate-100 pb-2">
+                            <span className="text-[9px] text-emerald-600 uppercase font-black tracking-wider">Holding Comparison</span>
+                            <h4 className="font-bold text-slate-900 text-sm">{t.assetName}</h4>
+                            <p className="text-[10px] text-slate-400 mt-1">Purchased: FY {t.buyFY} (CII: {buyCII}) &middot; Sold: FY {t.sellFY} (CII: {sellCII})</p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                              <span className="text-[9px] text-slate-400 block font-bold uppercase">Absolute cost</span>
+                              <span className="font-bold text-slate-700">₹{t.buyCost.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/50">
+                              <span className="text-[9px] text-amber-800 block font-bold uppercase">Indexed Cost</span>
+                              <span className="font-bold text-slate-800">₹{Math.round(t.indexedCost).toLocaleString('en-IN')}</span>
+                            </div>
+                          </div>
+
+                          {/* Head to Head Comparison */}
+                          <div className="border border-slate-100 rounded-lg overflow-hidden text-xs">
+                            <div className="grid grid-cols-3 bg-slate-50/80 font-bold text-slate-500 p-2 border-b border-slate-100">
+                              <div>Mechanism</div>
+                              <div>Net Gains</div>
+                              <div>Liability</div>
+                            </div>
+                            <div className={`grid grid-cols-3 p-2.5 border-b border-slate-100 ${!optimal ? 'bg-emerald-50/30 font-semibold' : ''}`}>
+                              <div>12.5% Flat</div>
+                              <div className="text-slate-500">₹{t.absoluteGain.toLocaleString('en-IN')}</div>
+                              <div className={!optimal ? 'text-emerald-600 font-extrabold' : ''}>₹{Math.round(tax125).toLocaleString('en-IN')}</div>
+                            </div>
+                            <div className={`grid grid-cols-3 p-2.5 ${optimal ? 'bg-emerald-50/30 font-semibold' : ''}`}>
+                              <div>20% Indexed</div>
+                              <div className="text-slate-500">₹{Math.round(t.indexedGain).toLocaleString('en-IN')}</div>
+                              <div className={optimal ? 'text-emerald-600 font-extrabold' : ''}>₹{Math.round(tax20).toLocaleString('en-IN')}</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB VIEW: HARVESTING */}
+            {activeTab === 'harvesting' && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3">
+                  <div className="flex items-center space-x-2 text-emerald-600">
+                    <i data-lucide="sparkles" className="w-5 h-5"></i>
+                    <h3 className="font-bold text-slate-900 text-sm">Tax-Loss & Profit Harvesting</h3>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                    Under Indian Section 112A, long-term capital gains up to **₹1.25 Lakhs per financial year** on listed equities/MFs are totally free of tax. Harvesting allows you to reset investment cost bases without paying exit penalties.
+                  </p>
+                </div>
+
+                {/* Exemption tracker detail */}
+                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-500">Annual Exemption Utilized</span>
+                    <span className="font-extrabold text-slate-800">₹{stats.equityTaxExemptGains.toLocaleString('en-IN')} / ₹1,25,000</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-emerald-500 h-2 rounded-full transition-all" 
+                      style={{ width: `${Math.min(100, (stats.equityTaxExemptGains / 125000) * 100)}%` }}
+                    ></div>
+                  </div>
+
+                  {stats.equityTaxExemptGains < 125000 ? (
+                    <div className="bg-emerald-50/70 border border-emerald-100/50 rounded-lg p-3 text-xs text-emerald-800">
+                      <span className="font-bold block text-emerald-950">Optimal Harvesting Opportunity:</span>
+                      You can exit and buy back additional holdings to book **₹{(125000 - stats.equityTaxExemptGains).toLocaleString('en-IN')}** of tax-exempt profits. This increases your investment cost base and reduces future tax liabilities.
+                    </div>
+                  ) : (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                      <span className="font-bold block text-blue-950">Exemption Maxed Out:</span>
+                      You have successfully used your entire ₹1.25 Lakh zero-tax allotment for this fiscal period.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+          </main>
+
+          {/* Bottom Native Footer */}
+          <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 z-30 pb-safe shadow-md">
+            <div className="max-w-md mx-auto flex justify-around">
+              <button 
+                onClick={() => { setActiveTab('dashboard'); setShowAddModal(true); }}
+                className="flex flex-col items-center justify-center text-slate-500 hover:text-emerald-600 transition"
+              >
+                <div className="bg-emerald-500 text-white p-3 rounded-full shadow-md mb-1">
+                  <i data-lucide="plus" className="w-5 h-5"></i>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">Add Sale Exit</span>
+              </button>
+            </div>
+          </footer>
+
+          {/* ADD TRANSACTION SLIDE UP MODAL */}
+          {showAddModal && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-end justify-center">
+              <div className="bg-white w-full max-w-md rounded-t-3xl p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto slide-up-modal">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">Add Realized Audit Entry</h3>
+                    <p className="text-[10px] text-slate-400 font-semibold">Audit tracking for Indian Income Tax Declarations</p>
+                  </div>
+                  <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 font-bold text-xs">
+                    Cancel
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddTransaction} className="space-y-3.5 text-xs">
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-bold uppercase">Asset / Security Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Infosys Ltd, DLF Flat, Sovereign Gold Bond"
+                      value={formData.assetName}
+                      onChange={(e) => setFormData({...formData, assetName: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold text-slate-800 focus:bg-white outline-none focus:border-emerald-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold uppercase">Asset Type</label>
+                      <select 
+                        value={formData.assetType}
+                        onChange={(e) => setFormData({...formData, assetType: e.target.value})}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-bold text-slate-800 outline-none"
+                      >
+                        <option value="equity">Equity Shares / Equity MFs</option>
+                        <option value="debt_mf">Debt Mutual Funds</option>
+                        <option value="gold_unlisted">Gold & Unlisted Shares</option>
+                        <option value="real_estate">Real Estate / Land</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold uppercase">Quantity Sold</label>
+                      <input 
+                        type="number" 
+                        value={formData.qty}
+                        onChange={(e) => setFormData({...formData, qty: e.target.value})}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold text-slate-800 outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold uppercase">Purchase Date</label>
+                      <input 
+                        type="date" 
+                        value={formData.buyDate}
+                        onChange={(e) => setFormData({...formData, buyDate: e.target.value})}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold text-slate-800 outline-none"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold uppercase">Sale Date</label>
+                      <input 
+                        type="date" 
+                        value={formData.sellDate}
+                        onChange={(e) => setFormData({...formData, sellDate: e.target.value})}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold text-slate-800 outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold uppercase">Buy Price (₹ / Qty)</label>
+                      <input 
+                        type="number" 
+                        value={formData.buyPrice}
+                        onChange={(e) => setFormData({...formData, buyPrice: e.target.value})}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold text-slate-800 outline-none"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-slate-400 font-bold uppercase">Sale Price (₹ / Qty)</label>
+                      <input 
+                        type="number" 
+                        value={formData.sellPrice}
+                        onChange={(e) => setFormData({...formData, sellPrice: e.target.value})}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold text-slate-800 outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <button 
+                    type="submit"
+                    className="w-full bg-slate-950 hover:bg-slate-800 text-white font-bold py-3 rounded-xl tracking-wide shadow-xs mt-3 transition"
+                  >
+                    Commit to Ledger
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* DYNAMIC PWA MOBILE INSTALLATION DRAWER */}
+          {showInstallGuide && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end justify-center">
+              <div className="bg-white w-full max-w-md rounded-t-3xl p-6 shadow-2xl space-y-5 slide-up-modal">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <h3 className="font-bold text-slate-900 text-sm">Install TaxSetu App</h3>
+                  <button onClick={() => setShowInstallGuide(false)} className="text-slate-400 font-bold text-xs p-1">Close</button>
+                </div>
+
+                <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                  Add TaxSetu directly to your smartphone home screen. Run it inside an isolated, full-screen viewport without address bars and with support for offline loadouts.
+                </p>
+
+                <div className="space-y-3.5 text-xs text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="flex items-start space-x-2">
+                    <div className="bg-slate-200 text-slate-800 w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] mt-0.5">1</div>
+                    <p className="font-medium">Tap your browser's <strong className="text-slate-900">Share</strong> (iOS Safari) or <strong className="text-slate-900">Menu</strong> (Android Chrome) button.</p>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <div className="bg-slate-200 text-slate-800 w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] mt-0.5">2</div>
+                    <p className="font-medium">Scroll down and select <strong className="text-slate-900">"Add to Home Screen"</strong>.</p>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <div className="bg-slate-200 text-slate-800 w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] mt-0.5">3</div>
+                    <p className="font-medium">Confirm the install to launch TaxSetu instantly from your app grid.</p>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => setShowInstallGuide(false)}
+                  className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl"
+                >
+                  Got It
+                </button>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    // Initialize React Root Elements & Lucide Icon Parsing
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(<App />);
+
+    // Initialize Lucide icons on DOM Load
+    setTimeout(() => {
+      lucide.createIcons();
+    }, 500);
+  </script>
+</body>
+</html>
