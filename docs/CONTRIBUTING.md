@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-TaxSetu is a **single-file PWA** — `taxsetu_pwa_master_file.html` contains all HTML, CSS, and JavaScript. There is no build pipeline, no package manager, and no backend.
+TaxSetu is a **single-file PWA** — `index.html` contains all HTML, CSS, and JavaScript. There is no build pipeline, no package manager, and no backend.
 
 ## Development Workflow
 
@@ -16,13 +16,13 @@ TaxSetu is a **single-file PWA** — `taxsetu_pwa_master_file.html` contains all
 
 2. **Open the app:**
    ```bash
-   open taxsetu_pwa_master_file.html
+   open index.html
    ```
    Or simply double-click the file in your file manager. No server required for basic development.
 
 ### Making Changes
 
-All code lives in `taxsetu_pwa_master_file.html`. The file is organized as:
+All code lives in `index.html`. The file is organized as:
 
 | Lines | Section |
 |-------|---------|
@@ -105,14 +105,14 @@ product-brainstorm.md        ← Free-form ideation (dump ideas, no rules)
         ↓
 docs/ROADMAP.md              ← Move polished ideas here as checklist items
         ↓
-taxsetu_pwa_master_file.html ← Implement the code
+index.html ← Implement the code
         ↓
 Ask AI: "Update docs"       ← Auto-syncs all affected docs + CHANGELOG + ROADMAP
 ```
 
 1. **Ideate freely** in `product-brainstorm.md` — messy notes, pros/cons, open questions. No structure required.
 2. **Commit to build**: Move a summary of the idea into `docs/ROADMAP.md` as a checklist item. Optionally mark the brainstorm entry as `[MOVED TO ROADMAP]`.
-3. **Implement** the code in `taxsetu_pwa_master_file.html`.
+3. **Implement** the code in `index.html`.
 4. **Update docs**: Ask any AI to "update docs to reflect the latest changes" — it will:
    - Read the code changes
    - Update the relevant docs from the mapping table above

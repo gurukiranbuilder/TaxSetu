@@ -2,7 +2,7 @@
 
 ## Overview
 
-TaxSetu is a **single-file Progressive Web App**. All HTML, CSS, and JavaScript live in `taxsetu_pwa_master_file.html`. There is no build pipeline, no package manager, and no backend server.
+TaxSetu is a **single-file Progressive Web App**. All HTML, CSS, and JavaScript live in `index.html`. There is no build pipeline, no package manager, and no backend server.
 
 ## Technology Stack
 
@@ -19,7 +19,7 @@ TaxSetu is a **single-file Progressive Web App**. All HTML, CSS, and JavaScript 
 ## File Structure
 
 ```
-taxsetu_pwa_master_file.html
+index.html
   ├── <head>
   │     ├── Meta tags (charset, viewport, PWA Apple meta)
   │     ├── Tailwind CSS CDN

@@ -6,7 +6,7 @@ TaxSetu is a fully offline-capable Progressive Web App. Both the Web App Manifes
 
 ## Dynamic Manifest Injection
 
-Located in the `<head>` section of `taxsetu_pwa_master_file.html`.
+Located in the `<head>` section of `index.html`.
 
 ```js
 const manifestData = {
@@ -112,7 +112,7 @@ If the app is **not** running in standalone mode, a slide-up drawer appears on f
 
 ## Deployment Notes
 
-- **Single file deployment**: Upload `taxsetu_pwa_master_file.html` to any static host (GitHub Pages, Netlify, Vercel, etc.)
+- **Single file deployment**: Upload `index.html` to any static host (GitHub Pages, Netlify, Vercel, etc.)
 - **No additional files needed**: Manifest and service worker are generated at runtime
 - **HTTPS required**: Service Workers only register on HTTPS (or localhost)
 - **Cache versioning**: The cache name (`taxsetu-v1`) should be incremented on significant updates to force re-caching
